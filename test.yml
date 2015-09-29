@@ -1,0 +1,85 @@
+#MySQL - Apache2 - PHP5 
+---
+- hosts: web-server
+  vars:
+    - description: "Web servers installation"
+    - mysql_root_password: "ohhhyeahhhh"
+    - mysql_debian_password: "coucoulol"
+
+  tasks:
+    - name: 1 -  Update APT
+      apt: update_cache=yes
+
+    - name: 2 -  Upgrade all paquets to the last version
+      apt: upgrade=dist
+
+    - name: 3 - Many soft installations
+      apt: name={{item.soft}} state=present
+      with_items:
+        - soft: vim
+        - soft: ccze
+        - soft: dnsutils
+        - soft: python-mysqldb
+        - soft: zip
+        - soft: w3m
+        - soft: bash-completion
+        - soft: randomize-lines
+        - soft: iotop
+
+    - name: 5 -  Color vim
+      lineinfile: dest=/etc/vim/vimrc state=present backup=yes backrefs=yes regexp='^"syntax on' line='syntax on'
+
+    - name: 4 -  Install apache2
+      apt: name=apache2 state=present
+
+    - name: 5 -  Install php5
+      apt: name=php5 state=present
+
+    - name: 6 -  Install php5-mysql
+      apt: name=php5-mysql state=present
+
+    - name: 7 -  Enabled mod_rewrite
+      apache2_module: name=rewrite state=present
+      notify:
+      - restart apache2
+
+    - name: 8 -  Install MySQL server
+      apt: name=mysql-server state=present
+
+    - name: 9 -  Save the original MySQL configuration
+      command: mv /etc/mysql/my.cnf /etc/mysql/my.cnf.original
+
+    - name: 10 -  Conf copy MySQL
+      template: src={{item.mysql_src}} dest={{item.mysql_dest}} owner={{item.mysql_owner}} group={{item.mysql_group}} mode={{item.mysql_mode}}
+      with_items:
+        - { mysql_src: my.cnf, mysql_dest: /etc/mysql/my.cnf, mysql_owner: root, mysql_group: root, mysql_mode: "u=rw,g=r,o=r" }
+        - { mysql_src: debian.cnf, mysql_dest: /etc/mysql/debian.cnf, mysql_owner: root, mysql_group: root, mysql_mode: "u=rw,g=r,o=r" }
+
+    - name: 11 -  Password change in debian.cnf
+      when: mysql_debian_password is defined
+      action: template src=debian.cnf dest=/etc/mysql/debian.cnf
+
+    - name: 12 -  MySQL data directories
+      file: dest={{item.mysql_dest}} owner=mysql group=mysql mode=0755 state=directory
+      with_items:
+        - mysql_dest: /home/mysql
+        - mysql_dest: /home/mysql/data
+        - mysql_dest: /home/mysql/tmp
+
+
+    - name: 13 -  MySQL db installation
+      command: mysql_install_db
+
+    - name: 14 -  MySQL server restart
+      service: name=mysql state=restarted
+
+    - name: 15 -  MySQL create user debian-sys-maint
+      mysql_user: name=debian-sys-maint password={{mysql_debian_password}} priv=*.*:ALL
+
+    - name: 16 -  MySQL root password
+      command: mysqladmin -u root password "{{mysql_root_password}}"
+
+  handlers:
+    - name: restart apache2
+      service: name=apache2 state=restarted
+
